@@ -33,6 +33,8 @@ local UnitLevel = UnitLevel
 local GetGuildInfo = GetGuildInfo
 local SendChatMessage = SendChatMessage
 
+local C_LFGList= C_LFGList
+
 local pcall = pcall
 
 local LE_PARTY_CATEGORY_HOME = LE_PARTY_CATEGORY_HOME
@@ -469,13 +471,13 @@ function SB:reference_incident_to_player(input)
 	-- or alternately a player_info table for each player in the case.
 	if input.guid then
 		self.user_table[input.guid].incidents[self.incident_counter] = true
-	else
-		if not self.name_to_incident_table[input.full_name] then
-			self.name_to_incident_table[input.full_name] = {}
-			self.name_to_incident_table[input.full_name].incidents = {}
-		end
-		self.name_to_incident_table[input.full_name].incidents[self.incident_counter] = true
 	end
+	if not self.name_to_incident_table[input.full_name] then
+		self.name_to_incident_table[input.full_name] = {}
+		self.name_to_incident_table[input.full_name].incidents = {}
+	end
+	self.name_to_incident_table[input.full_name].incidents[self.incident_counter] = true
+
 end
 
 --=========================================================================================
@@ -1002,9 +1004,12 @@ function SB:PLAYER_ENTERING_WORLD()
 		if conf.scans.group.enabled and IsInGroup(LE_PARTY_CATEGORY_HOME) then
 			self:GROUP_ROSTER_UPDATE()
 		end
+		hooksecurefunc("LFGBrowseSearchEntry_Update", function(frame) -- Called on LFGListingActivityView being shown
+			SB:OnUpdateBrowseSearchEntry(frame)
+		end)	
 		self.first_enter_world = false
 	end
-
+	
 end
 
 function SB:set_scan_events()
@@ -1080,6 +1085,93 @@ function SB:show_stats()
 	self:Print("N detections realm = " .. tostring(self.db.realm.n_detections))
 	self:Print("N alerts realm = " .. tostring(self.db.realm.n_alerts))
 end
+
+
+function SB:OnUpdateBrowseSearchEntry(frame)
+	if frame:IsShown() then
+		if frame.GetElementData then 
+			local elementData = frame:GetElementData()
+			if elementData.resultID then
+				local resutlID=elementData.resultID
+				local ListingData=C_LFGList.GetSearchResultInfo(resutlID)
+				if not ListingData then return end
+				local badLeader=false
+				local badMember=false
+				if ListingData.leaderName and self.name_to_incident_table[ListingData.leaderName .. "-" .. self.realm_name] then
+					badLeader=true
+				end
+				local isSolo=ListingData.numMembers and ListingData.numMembers==1 or false
+				if ListingData.numMembers then
+					
+					for n=1, ListingData.numMembers do
+						local memberName,_,_,_,_,isLeader=C_LFGList.GetSearchResultMemberInfo(resutlID,n)
+						if memberName then 
+							local full_name = memberName .. "-" .. self.realm_name
+							--print("Checking incidents for:", full_name)
+							if self.name_to_incident_table[full_name] then
+								if isLeader then
+									badLeader=true
+								else
+									badMember=true
+								end
+
+							end		
+						end
+
+					end
+					
+				end
+				if isSolo then				
+					if badLeader then
+						--frame.Name:SetText("Scambusted player")
+						--frame.Name:SetTextColor(1, 0, 0);
+						frame.ResultBG:SetColorTexture(1, 0, 0,0.4);
+					end
+				else
+					if badLeader then
+						--frame.Name:SetText("Scambusted leader")
+						--frame.Name:SetTextColor(1, 0, 0);
+						frame.ResultBG:SetColorTexture(1, 0, 0,0.4);					
+					elseif badMember then
+						--frame.Name:SetText("Scambusted players")
+						--frame.Name:SetTextColor(1, 0, 0);
+						frame.ResultBG:SetColorTexture(1, 1, 0,0.4);
+					end
+				end
+				if not (badLeader or badMember) then
+					frame.ResultBG:SetColorTexture(1, 1, 1,0.04);	
+				end
+
+
+
+			end
+			--for i,v in pairs(elementData) do print(i,v) end
+			--print(frame.Name:GetText())
+
+		end
+	end 
+end
+function SB:OnDataRangeChanged(scrollFrame)
+	print("OnDataRangeChanged called")
+	-- Go through all frames, filter out all instances that you can get saved in
+	-- Store each frame based on their text
+	local frames = scrollFrame.ScrollBox:GetFrames()
+	for i = 1, #frames do
+		local frame = frames[i]
+		local elementData = frame:GetElementData()
+		local parent = elementData.parent
+		local data = parent:GetData()
+
+		print(frame.NameButton.Name:GetText())
+	end
+
+
+end
+
+
+
+
+
 
 --=========================================================================================
 -- Debug for lua parsing
