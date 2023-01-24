@@ -202,6 +202,7 @@ function SB:OnInitialize()
 	self:RegisterChatCommand("dump_incidents", "dump_incidents")
 	self:RegisterChatCommand("dump_name_lookup", "dump_name_lookup")
 	self:RegisterChatCommand("dump_udi", "dump_udi")
+	self:RegisterChatCommand("check_renames", "scan_providers_renames")
 	self:RegisterChatCommand("clear_udi", "clear_udi")
 	self:RegisterChatCommand("clear_fps", "clear_fps")
 	self:RegisterChatCommand("show_stats", "show_stats")
@@ -1055,6 +1056,46 @@ end
 
 function SB:dump_udi()
 	print(tab_dump(self:get_UDI()))
+end
+
+function SB:scan_providers_renames()
+	self:Print("Checking providers GUIDs if they match up with their names.")
+	local noresult=0
+	local providerRenames={}
+	for guid,data in pairs(self.user_table) do
+		local name = select(6, GetPlayerInfoByGUID(guid)) 
+		
+		if name then
+			if data.names then
+				for provider,p_name in pairs(data.names) do 
+					if p_name~=name then						
+						if not providerRenames[provider] then
+							providerRenames[provider]={}
+						end
+						providerRenames[provider][p_name]=name
+						--self:Print(string.format("%s has not updated the rename by %s, new name is: %s",provider,p_name,name))
+					end
+				end
+
+			end
+		else
+			noresult=noresult+1
+		end
+	end
+	if noresult>10 then
+		self:Print("Couldn't get names from GUIDs on more than 10 characters, please rerun the command")
+	else
+		
+		for provider, data in pairs(providerRenames) do
+			local returnString=string.format("The provider: %s is missing the following renames:\n",provider)
+			for oldName,newName in pairs(data) do
+				returnString=returnString.. string.format("%s has renamed to: %s\n",oldName,newName)
+			end
+			self:Print(returnString)
+		end
+		
+	end
+
 end
 
 function SB:clear_udi()
